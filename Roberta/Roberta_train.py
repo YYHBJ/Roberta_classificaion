@@ -21,7 +21,7 @@ labels={}
 for idx, la in enumerate(c):
     labels.update({la:idx})
     
-class Dataset(torch.utils.data.Dataset):
+class Dataset(torch.utils.data.Dataset):      
     
     def __init__(self, df):
 
