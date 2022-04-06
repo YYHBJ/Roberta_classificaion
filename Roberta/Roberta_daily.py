@@ -21,7 +21,7 @@ test = pd.read_csv('csv/test.csv')
 
 
 le = preprocessing.LabelEncoder()
-le.fit(df['topic'])
+le.fit(df['act'])
 c = list(le.classes_)
 labels={}
 for idx, la in enumerate(c):
@@ -31,9 +31,9 @@ class Dataset(torch.utils.data.Dataset):
     
     def __init__(self, df):
 
-        self.labels = [torch.tensor(labels[label], dtype=torch.long) for label in df['topic']]
+        self.labels = [torch.tensor(labels[label], dtype=torch.long) for label in df['act']]
         self.texts  = [tokenizer(text, 
-                               padding='max_length', max_length = 512, truncation=True,
+                               padding='max_length', max_length = 220, truncation=True,
                                 return_tensors="pt") for text in df['text']]
         # self.story = torch.Tensor(tokenizer.convert_tokens_to_ids(self.texts)).long()
 
@@ -79,6 +79,31 @@ class Classifier(nn.Module):
         final_layer = self.relu(linear_output)
 
         return final_layer
+
+class Topic_Classifier(nn.Module):
+    
+    def __init__(self, dropout=0.2):
+
+        super(Topic_Classifier, self).__init__()
+
+        self.bert = bert
+        self.dropout = nn.Dropout(dropout)
+        self.linear = nn.Linear(1024, 512)
+        self.linear2 = nn.Linear(512, 128)
+        self.linear3 = nn.Linear(128, 10)
+        # self.linear2 = nn.Linear(256, 10)
+        self.relu = nn.ReLU()
+
+    def forward(self, input_id, mask):
+
+        _, pooled_output = self.bert(input_ids= input_id, attention_mask=mask, return_dict=False)
+        dropout_output = self.dropout(pooled_output)
+        linear_output = self.linear(dropout_output)
+        linear_output2 = self.linear2(linear_output)
+        linear_output3 = self.linear3(linear_output2)
+        final_layer = self.relu(linear_output3)
+
+        return final_layer
     
 class Act_Classifier(nn.Module):
     
@@ -88,8 +113,8 @@ class Act_Classifier(nn.Module):
 
         self.bert = bert
         self.dropout = nn.Dropout(dropout)
-        self.linear = nn.Linear(1024, 4)
-        # self.linear2 = nn.Linear(256, 10)
+        self.linear = nn.Linear(1024, 256)
+        self.linear2 = nn.Linear(256, 4)
         self.relu = nn.ReLU()
 
     def forward(self, input_id, mask):
@@ -97,8 +122,8 @@ class Act_Classifier(nn.Module):
         _, pooled_output = self.bert(input_ids= input_id, attention_mask=mask, return_dict=False)
         dropout_output = self.dropout(pooled_output)
         linear_output = self.linear(dropout_output)
-        # linear_output2 = self.linear2(linear_output)
-        final_layer = self.relu(linear_output)
+        linear_output2 = self.linear2(linear_output)
+        final_layer = self.relu(linear_output2)
 
         return final_layer
         
@@ -106,8 +131,8 @@ def train(model, train_data, val_data, learning_rate, epochs):
     
     train, val = Dataset(train_data), Dataset(val_data)
 
-    train_dataloader = torch.utils.data.DataLoader(train, batch_size=2, shuffle=True)
-    val_dataloader = torch.utils.data.DataLoader(val, batch_size=1)
+    train_dataloader = torch.utils.data.DataLoader(train, batch_size=3, shuffle=True)
+    val_dataloader = torch.utils.data.DataLoader(val, batch_size=2)
 
     #GPU
     use_cuda = torch.cuda.is_available()
@@ -172,7 +197,7 @@ def evaluate(model, test_data):
     
     test = Dataset(test_data)
 
-    test_dataloader = torch.utils.data.DataLoader(test, batch_size=1)
+    test_dataloader = torch.utils.data.DataLoader(test, batch_size=2)
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -197,7 +222,7 @@ def evaluate(model, test_data):
     
     print(f'Test Accuracy: {total_acc_test / len(test_data): .3f}')
     
-np.random.seed(112)
+np.random.seed(2019)
 print(len(df),len(val), len(test))
 
 
@@ -205,9 +230,9 @@ print(len(df),len(val), len(test))
 TRAIN
 """
 EPOCHS = 10
-model = Classifier()
-LR = 5e-7
+model = Topic_Classifier()
+LR = 5e-6
               
 train(model, df, val, LR, EPOCHS)
-torch.save(model,'models/model_roberta_act.pt')  
+torch.save(model,'models/model_topic_46.pt')  
 evaluate(model, test)
