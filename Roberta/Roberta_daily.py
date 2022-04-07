@@ -21,7 +21,7 @@ test = pd.read_csv('csv/test.csv')
 
 
 le = preprocessing.LabelEncoder()
-le.fit(df['act'])
+le.fit(df['topic'])
 c = list(le.classes_)
 labels={}
 for idx, la in enumerate(c):
@@ -31,7 +31,7 @@ class Dataset(torch.utils.data.Dataset):
     
     def __init__(self, df):
 
-        self.labels = [torch.tensor(labels[label], dtype=torch.long) for label in df['act']]
+        self.labels = [torch.tensor(labels[label], dtype=torch.long) for label in df['topic']]
         self.texts  = [tokenizer(text, 
                                padding='max_length', max_length = 220, truncation=True,
                                 return_tensors="pt") for text in df['text']]
