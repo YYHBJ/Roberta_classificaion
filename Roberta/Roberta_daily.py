@@ -4,6 +4,7 @@ import numpy as np
 from torch import nn
 from torch.optim import Adam
 from tqdm import tqdm
+import transformers
 from transformers import *
 from sklearn import preprocessing
 
@@ -21,7 +22,7 @@ test = pd.read_csv('csv/test.csv')
 
 
 le = preprocessing.LabelEncoder()
-le.fit(df['topic'])
+le.fit(df['emotion'])
 c = list(le.classes_)
 labels={}
 for idx, la in enumerate(c):
@@ -31,7 +32,7 @@ class Dataset(torch.utils.data.Dataset):
     
     def __init__(self, df):
 
-        self.labels = [torch.tensor(labels[label], dtype=torch.long) for label in df['topic']]
+        self.labels = [torch.tensor(labels[label], dtype=torch.long) for label in df['emotion']]
         self.texts  = [tokenizer(text, 
                                padding='max_length', max_length = 220, truncation=True,
                                 return_tensors="pt") for text in df['text']]
@@ -66,7 +67,7 @@ class Classifier(nn.Module):
 
         self.bert = bert
         self.dropout = nn.Dropout(dropout)
-        self.linear = nn.Linear(1024, 10)
+        self.linear = nn.Linear(1024, 7)
         # self.linear2 = nn.Linear(256, 10)
         self.relu = nn.ReLU()
 
@@ -82,14 +83,14 @@ class Classifier(nn.Module):
 
 class Topic_Classifier(nn.Module):
     
-    def __init__(self, dropout=0.2):
+    def __init__(self, dropout=0.1):
 
         super(Topic_Classifier, self).__init__()
 
         self.bert = bert
         self.dropout = nn.Dropout(dropout)
-        self.linear = nn.Linear(1024, 512)
-        self.linear2 = nn.Linear(512, 128)
+        self.linear = nn.Linear(1024, 128)
+        # self.linear2 = nn.Linear(512, 128)
         self.linear3 = nn.Linear(128, 10)
         # self.linear2 = nn.Linear(256, 10)
         self.relu = nn.ReLU()
@@ -99,8 +100,8 @@ class Topic_Classifier(nn.Module):
         _, pooled_output = self.bert(input_ids= input_id, attention_mask=mask, return_dict=False)
         dropout_output = self.dropout(pooled_output)
         linear_output = self.linear(dropout_output)
-        linear_output2 = self.linear2(linear_output)
-        linear_output3 = self.linear3(linear_output2)
+        # linear_output2 = self.linear2(linear_output)
+        linear_output3 = self.linear3(linear_output)
         final_layer = self.relu(linear_output3)
 
         return final_layer
@@ -207,10 +208,13 @@ def evaluate(model, test_data):
         model = model.cuda()
 
     total_acc_test = 0
+    all_testlabel=[]
+    all_output=[]
     with torch.no_grad():
 
         for test_input, test_label in test_dataloader:
-
+            
+            #   print(test_label)
               test_label = test_label.to(device)
               mask = test_input['attention_mask'].to(device)
               input_id = test_input['input_ids'].squeeze(1).to(device)
@@ -219,8 +223,23 @@ def evaluate(model, test_data):
 
               acc = (output.argmax(dim=1) == test_label).sum().item()
               total_acc_test += acc
+              
+              all_testlabel.append(test_label.cpu())
+              all_output.append(output.cpu().argmax(dim=1))
+              
+    import itertools
+    from sklearn.metrics import f1_score, confusion_matrix
+    testlabels=list(itertools.chain.from_iterable(all_testlabel))
+    # print(testlabels)
+    outputs = list(itertools.chain.from_iterable(all_output))
+    f1_score = f1_score(testlabels, outputs,average='micro')
+    confusion_matrix = confusion_matrix(testlabels, outputs)
     
+              
     print(f'Test Accuracy: {total_acc_test / len(test_data): .3f}')
+    print(f'f1 score:',f1_score)
+    print(f'confusion_matrix:\n',confusion_matrix)
+    
     
 np.random.seed(2019)
 print(len(df),len(val), len(test))
@@ -229,10 +248,11 @@ print(len(df),len(val), len(test))
 """
 TRAIN
 """
-EPOCHS = 10
-model = Topic_Classifier()
-LR = 5e-6
+EPOCHS = 6
+model = Classifier()
+LR = 1e-6
               
 train(model, df, val, LR, EPOCHS)
-torch.save(model,'models/model_topic_46.pt')  
+torch.save(model.state_dict(), 'models/model_emo_410.pt')
+# torch.save(model,'models/model_emo_410.pt')  
 evaluate(model, test)
